@@ -105,17 +105,65 @@ La variante con POS obtuvo mayor F1 en las tres semillas evaluadas, con una mejo
 
 ## Taller 2 — NER con Transformer encoder
 
-**Cuaderno:** [`notebook_taller_2.ipynb`](notebook_taller_2.ipynb).
+**Cuaderno:** [`notebook_taller_2.ipynb`](notebook_taller_2.ipynb) · [![Abrir en Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/jhavierc/NLP_taller_1/blob/main/notebook_taller_2.ipynb)
 
-Sustituye la Bi-LSTM por un encoder implementado con PyTorch siguiendo el ejemplo de clase: posiciones sinusoidales, atención multicabeza, conexiones residuales y redes densas. Usa dos bloques, cuatro cabezas y dimensión interna 128; una capa lineal produce las 11 etiquetas BIO por token. Los embeddings se entrenan desde cero.
+### Objetivo
 
-Conserva el preprocesamiento, las particiones, las variantes con/sin POS y las tres semillas del taller 1. El PASO 10B compara automáticamente los nuevos resultados de validación con los valores exactos guardados del taller 1, verificando datos, partición y preprocesamiento. Se reportan diferencias de F1 por semilla y categoría, parámetros y tiempos. **Los resultados del Transformer están pendientes de ejecución en Kaggle.**
+Reemplazar la Bi-LSTM de taller 1 por un encoder Transformer implementado desde cero, manteniendo exactamente el mismo corpus, partición, preprocesamiento y variantes con/sin POS, para aislar el efecto de cambiar únicamente la arquitectura.
 
-Para ejecutarlo, importar el notebook en Kaggle, activar **Internet** y **GPU T4 ×2**, y ejecutar las celdas en orden. El lote global de 16 ejemplos se reparte entre ambas GPU. La prueba técnica comprueba atención, gradientes, padding y participación de los dispositivos antes de los seis entrenamientos.
+### Arquitectura
 
-El test final está habilitado para la ejecución completa: selecciona la variante con mayor F1 medio de validación y usa la semilla 42, fijada antes de entrenar. Guarda `summary.json`, `comparison_transformer_vs_lstm_*.csv`, `informe_taller_2.md`, vocabulario, partición y checkpoints bajo `/kaggle/working/spaccc_transformer/`. No es necesario adjuntar el notebook del taller 1: la línea base está incluida con su procedencia.
+Transformer encoder construido en PyTorch pieza por pieza (sin pesos preentrenados): positional encoding sinusoidal, atención multi-cabeza, conexiones residuales y normalización. Reutiliza el mismo extractor de taller 1 (spaCy `es_core_news_sm` para tokenización y POS) y el mismo esquema de etiquetas BIO.
 
-La comparación es descriptiva y los modelos tienen distinto número de parámetros. Mantiene las limitaciones de BIO plano y de la evaluación por bloques del taller 1; no garantiza una mejora por usar Transformer.
+- 2 bloques Transformer, 4 cabezas de atención, dimensión interna (`d_model`) 128.
+- Embeddings de palabra (64) y, opcionalmente, de POS (16) entrenados desde cero; cabezal lineal a las 11 etiquetas BIO.
+
+Mismas dos variantes de taller 1:
+
+| Variante | Entrada al modelo |
+|---|---|
+| `con_pos` | Embedding de palabra + embedding de POS |
+| `sin_pos` | Solo embedding de palabra (control experimental) |
+
+### Metodología
+
+El cuaderno está organizado en 14 pasos secuenciales (más un sub-paso 11B), pensados para ejecutarse en Kaggle con GPU (2× Tesla T4):
+
+1. Instalación de dependencias y modelo de spaCy.
+2. Configuración, semillas y verificación de GPU.
+3. Descarga y auditoría del corpus.
+4. Análisis exploratorio de los datos (EDA): distribución de clases, longitud de entidades, densidad por documento.
+5. Partición fija por documento (idéntica a taller 1: 600 train / 150 validación / 250 test reservado).
+6. Tokenización, alineación de offsets y construcción de etiquetas BIO.
+7. Vocabulario, `DataLoader` y función de pérdida ponderada por clase.
+8. Definición del Transformer encoder y de las métricas de evaluación (misma coincidencia exacta de entidades de taller 1).
+9. Prueba técnica (smoke test) de las dos variantes.
+10. Seis entrenamientos independientes: 2 variantes × 3 semillas (`42`, `123`, `2026`).
+11. Agregación de resultados (media, desviación estándar, diferencias pareadas).
+   - **11B.** Comparación automática contra la línea base histórica de taller 1 (embebida en el propio cuaderno con su procedencia), verificando antes que datos, partición y preprocesamiento coincidan exactamente.
+12. Evaluación final sobre el conjunto de test — habilitada por defecto: la variante se selecciona por mayor F1 medio de validación y la semilla queda fijada en 42 desde antes de entrenar.
+13. Inferencia interactiva sobre texto nuevo.
+14. Experimento editable: reentrena una variante/semilla con hiperparámetros modificados, para exploración rápida sin rehacer todo el cuaderno.
+
+### Resultados
+
+Comparación multisemilla en validación (F1 en %):
+
+| Variante | F1 medio | Desv. estándar | Precisión media | Recall medio |
+|---|---:|---:|---:|---:|
+| `con_pos` | **26.69 %** | 1.73 % | 19.94 % | 40.54 % |
+| `sin_pos` | 24.98 % | 2.26 % | 18.21 % | 40.14 % |
+
+La variante con POS ganó en las tres semillas (mejora media **+1.71 puntos porcentuales**) — el mismo patrón cualitativo que taller 1. Frente a la Bi-LSTM (PASO 11B), el Transformer queda **~12 puntos porcentuales por debajo en ambas variantes, en las tres semillas sin excepción** (`con_pos`: 26.69 % vs 38.96 %; `sin_pos`: 24.98 % vs 37.13 %). En el test final (`con_pos`, semilla 42) se obtuvo un F1 micro de **25.13 %** sobre 9,415 entidades, consistente con el F1 de validación.
+
+Hallazgo exploratorio (PASO 14, una sola semilla): desactivar los pesos por clase (`class_weights=False`) mejoró el F1 de 28.11 % a **37.22 %** (+9.11 pp) en la semilla 123, y redujo casi a la mitad las transiciones BIO inválidas — una pista más prometedora que la profundidad o el POS para mejorar este modelo, pendiente de confirmar con las tres semillas.
+
+### Limitaciones
+
+- Mismas limitaciones de esquema BIO plano y partición fija de taller 1; la comparación contra la Bi-LSTM es descriptiva (arquitecturas con distinto número de parámetros).
+- El modelo sobre-predice de forma sistemática (recall ~2× la precisión) y genera muchas transiciones BIO inválidas, tanto en validación como en test — el cuello de botella principal no parece ser la falta de POS ni la profundidad, sino la propia arquitectura desde cero.
+- El hallazgo del PASO 14 sobre `class_weights` usa una sola semilla y debe confirmarse con las tres antes de adoptarse como configuración base.
+- La confianza reportada en la inferencia interactiva no está calibrada.
 
 ## Taller 3 — NER con BERT preentrenado
 
