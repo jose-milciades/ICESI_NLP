@@ -5,8 +5,24 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from mcp.server.fastmcp import FastMCP
 
 model_name = "Qwen/Qwen2.5-1.5B-Instruct"
-device = "mps" if torch.backends.mps.is_available() else (
-    "cuda" if torch.cuda.is_available() else "cpu")
+
+
+def _elegir_dispositivo() -> str:
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        # Algunas GPU (p. ej. la P100 de Kaggle) se detectan pero no son
+        # compatibles con las versiones recientes de PyTorch: se prueba una
+        # operación real y, si falla, se usa la CPU.
+        try:
+            (torch.ones(1, device="cuda") + 1).item()
+            return "cuda"
+        except Exception as exc:
+            print(f"GPU no utilizable ({exc}); se usará CPU.", flush=True)
+    return "cpu"
+
+
+device = _elegir_dispositivo()
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 model = AutoModelForCausalLM.from_pretrained(
     model_name,
