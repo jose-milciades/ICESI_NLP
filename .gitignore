@@ -1,3 +1,6 @@
 # Datos descargados y resultados locales del taller 3
 /spaccc_bert/
 spaccc_bert/
+
+# Caché de datos, benchmark y vector store del taller 5
+data_taller5/
