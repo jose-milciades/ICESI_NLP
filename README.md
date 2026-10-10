@@ -264,7 +264,8 @@ Olvido catastrófico: el dominio general de control **no empeoró** tras el ajus
 ## Taller 5 — RAG sobre casos clínicos SPACCC con Ollama
 
 **Cuaderno:** [`notebook-taller-5-rag.ipynb`](notebook-taller-5-rag.ipynb)
-**Video:**['Video del chat'](https://www.youtube.com/watch?v=n4DPynLR4bo)
+
+**Video:**[Video del chat](https://www.youtube.com/watch?v=n4DPynLR4bo)
 
 ### Objetivo
 
